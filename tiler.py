@@ -9,7 +9,7 @@ import math
 import pickle
 import conf
 from time import sleep
-
+import argparse
 
 # number of colors per image
 COLOR_DEPTH = conf.COLOR_DEPTH
@@ -39,7 +39,8 @@ def read_image(path):
 
 # scales an image
 def resize_image(img, ratio):
-    img = cv2.resize(img, (int(img.shape[1] * ratio), int(img.shape[0] * ratio)))
+    img = cv2.resize(
+        img, (int(img.shape[1] * ratio), int(img.shape[0] * ratio)))
     return img
 
 
@@ -52,12 +53,12 @@ def mode_color(img, ignore_alpha=False):
             if len(x) < 4 or ignore_alpha or x[3] != 0:
                 counter[tuple(x[:3])] += 1
             else:
-                counter[(-1,-1,-1)] += 1
+                counter[(-1, -1, -1)] += 1
             total += 1
 
     if total > 0:
         mode_color = max(counter, key=counter.get)
-        if mode_color == (-1,-1,-1):
+        if mode_color == (-1, -1, -1):
             return None, None
         else:
             return mode_color, counter[mode_color] / total
@@ -117,7 +118,7 @@ def image_boxes(img, res):
         for x in range(0, img.shape[1], shift[0]):
             boxes.append({
                 'img': img[y:y+res[0], x:x+res[1]],
-                'pos': (x,y)
+                'pos': (x, y)
             })
 
     return boxes
@@ -138,7 +139,8 @@ def most_similar_tile(box_mode_freq, tiles):
         min_distance = None
         min_tile_img = None
         for t in tiles:
-            dist = (1 + color_distance(box_mode_freq[0], t['mode'])) / box_mode_freq[1]
+            dist = (
+                1 + color_distance(box_mode_freq[0], t['mode'])) / box_mode_freq[1]
             if min_distance is None or dist < min_distance:
                 min_distance = dist
                 min_tile_img = t['tile']
@@ -149,13 +151,15 @@ def most_similar_tile(box_mode_freq, tiles):
 def get_processed_image_boxes(image_path, tiles):
     print('Getting and processing boxes')
     img = read_image(image_path)
+    # print("read image success!")
     pool = Pool(POOL_SIZE)
     all_boxes = []
 
     for res, ts in tqdm(sorted(tiles.items(), reverse=True)):
         boxes = image_boxes(img, res)
         modes = pool.map(mode_color, [x['img'] for x in boxes])
-        most_similar_tiles = pool.starmap(most_similar_tile, zip(modes, [ts for x in range(len(modes))]))
+        most_similar_tiles = pool.starmap(
+            most_similar_tile, zip(modes, [ts for x in range(len(modes))]))
 
         i = 0
         for min_dist, tile in most_similar_tiles:
@@ -176,7 +180,8 @@ def place_tile(img, box):
     mask = box['tile'][:, :, 3] != 0
     mask = mask[:img_box.shape[0], :img_box.shape[1]]
     if OVERLAP_TILES or not np.any(img_box[mask]):
-        img_box[mask] = box['tile'][:img_box.shape[0], :img_box.shape[1], :][mask]
+        img_box[mask] = box['tile'][:img_box.shape[0],
+                                    :img_box.shape[1], :][mask]
 
 
 # tiles the image
@@ -195,28 +200,44 @@ def create_tiled_image(boxes, res, render=False):
 
 # main
 def main():
-    if len(sys.argv) > 1:
-        image_path = sys.argv[1]
-    else:
-        image_path = conf.IMAGE_TO_TILE
+    # if len(sys.argv) > 1:
+    #     image_path = sys.argv[1]
+    # else:
+    #     image_path = conf.IMAGE_TO_TILE
+    # # print(image_path)
 
-    if len(sys.argv) > 2:
-        tiles_paths = sys.argv[2:]
-    else:
-        tiles_paths = conf.TILES_FOLDER.split(' ')
+    # if len(sys.argv) > 2:
+    #     tiles_paths = sys.argv[2:]
+    # else:
+    #     tiles_paths = conf.TILES_FOLDER.split(' ')
 
-    if not os.path.exists(image_path):
+    # if not os.path.exists(image_path):
+    #     print('Image not found')
+    #     exit(-1)
+    # for path in tiles_paths:
+    #     if not os.path.exists(path):
+    #         print('Tiles folder not found')
+    #         exit(-1)
+    parser = argparse.ArgumentParser(description='manual to this script')
+    parser.add_argument("--i", type=str, default=None)
+    parser.add_argument("--m", type=str, default=None)
+    parser.add_argument("--o", type=str, default="out.png")
+    args = parser.parse_args()
+    image_path = args.i
+    tiles_paths = args.m.split(",")
+    output_path = args.o
+    if(image_path == None):
         print('Image not found')
         exit(-1)
-    for path in tiles_paths:
-        if not os.path.exists(path):
-            print('Tiles folder not found')
-            exit(-1)
+    if(tiles_paths == None):
+        print("Tiles folder not found")
+        exit(-1)
+    print(image_path,tiles_paths)
 
     tiles = load_tiles(tiles_paths)
     boxes, original_res = get_processed_image_boxes(image_path, tiles)
     img = create_tiled_image(boxes, original_res, render=conf.RENDER)
-    cv2.imwrite(conf.OUT, img)
+    cv2.imwrite(output_path, img)
 
 
 if __name__ == "__main__":
